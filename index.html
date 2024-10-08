@@ -39,30 +39,14 @@
     <h1>H5P JSON Generator for Multiple Choice Questions</h1>
     <p>Enter your questions and answers in the specified format below:</p>
     <pre>
-1. QUESTION 1 
-
+QUESTION 1 
 *CORRECT ANSWER::FEEDBACK *ITALIC TEXT*
-
 INCORRECT ANSWER::FEEDBACK **BOLD TEXT**
-
 INCORRECT ANSWER::FEEDBACK
 
-
-2. QUESTION 2
-
+QUESTION 2
 *CORRECT ANSWER::FEEDBACK
-
 INCORRECT ANSWER::FEEDBACK
-
-INCORRECT ANSWER::FEEDBACK
-
-
-3. QUESTION 3
-
-*CORRECT ANSWER::FEEDBACK
-
-INCORRECT ANSWER::FEEDBACK
-
 INCORRECT ANSWER::FEEDBACK
     </pre>
     <textarea id="inputText" placeholder="Enter your formatted questions here..."></textarea>
@@ -74,8 +58,6 @@ INCORRECT ANSWER::FEEDBACK
     <div id="output"></div>
 
     <script>
-        // Existing functions: generateUUID, formatFeedback, parseInput, generateJSON, downloadJSON
-
         // Function to generate UUID (unchanged)
         function generateUUID() { // Public Domain/MIT
             if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -107,24 +89,28 @@ INCORRECT ANSWER::FEEDBACK
             return text;
         }
 
-        // Function to parse input (unchanged)
+        // **Updated parseInput Function**
         function parseInput(input) {
             const questions = [];
-            // Split by question numbers (e.g., "1. ", "2. ", etc.)
-            const questionBlocks = input.split(/\n\s*\n|(?=\d+\.\s)/).filter(block => block.trim() !== '');
+            // Split input by two or more newlines to separate questions
+            const questionBlocks = input.split(/\n{2,}/).filter(block => block.trim() !== '');
 
             questionBlocks.forEach(block => {
-                // Extract question number and text
-                const questionMatch = block.match(/^(\d+)\.\s*(.*)$/m);
-                if (!questionMatch) {
-                    console.warn("Question block not properly formatted:", block);
+                const lines = block.trim().split('\n').filter(line => line.trim() !== '');
+                if (lines.length === 0) {
+                    console.warn("Empty question block found:", block);
                     return;
                 }
-                const questionNumber = parseInt(questionMatch[1], 10);
-                const questionText = questionMatch[2].trim();
 
-                // Extract answers
-                const answerLines = block.split('\n').slice(1).filter(line => line.trim() !== '');
+                // **Assumption:** The first line is the question text
+                const questionText = lines[0].trim();
+                const answerLines = lines.slice(1).filter(line => line.trim() !== '');
+
+                if (answerLines.length === 0) {
+                    console.warn("No answers found for question:", questionText);
+                    return;
+                }
+
                 const answers = [];
                 answerLines.forEach(line => {
                     let isCorrect = false;
@@ -228,7 +214,7 @@ INCORRECT ANSWER::FEEDBACK
             return questions;
         }
 
-        // Function to generate JSON (modified)
+        // **Updated generateJSON Function**
         function generateJSON() {
             const inputText = document.getElementById('inputText').value;
             if (inputText.trim() === '') {
@@ -243,7 +229,7 @@ INCORRECT ANSWER::FEEDBACK
                 return;
             }
 
-            // Build the full JSON structure (existing code)
+            // Build the full JSON structure (unchanged)
             const fullJSON = {
                 introPage: {
                     showIntroPage: true,
@@ -301,7 +287,7 @@ INCORRECT ANSWER::FEEDBACK
             document.getElementById('downloadZipBtn').style.display = 'inline-block'; // Show the new zip download button
         }
 
-        // Function to download JSON (unchanged)
+        // Function to download JSON (unchanged except for filename)
         function downloadJSON() {
             if (!window.generatedJSON) {
                 alert("No JSON generated to download.");
@@ -311,14 +297,14 @@ INCORRECT ANSWER::FEEDBACK
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'h5p_question_set.json';
+            a.download = 'content.json'; // **Changed filename from h5p_question_set.json to content.json**
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
 
-        // New function to download the zipped file containing File B and the generated JSON
+        // Function to download the zipped file containing File B and the generated JSON
         async function downloadZippedFile() {
             if (!window.generatedJSON) {
                 alert("No JSON generated to download.");
@@ -330,7 +316,7 @@ INCORRECT ANSWER::FEEDBACK
 
             try {
                 // Fetch File B.zip from GitHub
-                const fileBUrl = "https://raw.githubusercontent.com/aburossi/h5p-mc/main/resources/fileB.zip"; // Replace with your actual URL
+                const fileBUrl = "https://raw.githubusercontent.com/yourusername/h5p-json-generator/main/resources/fileB.zip"; // **Replace with your actual URL**
                 const response = await fetch(fileBUrl);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch File B: ${response.statusText}`);
@@ -341,8 +327,8 @@ INCORRECT ANSWER::FEEDBACK
                 // Load File B.zip into JSZip
                 const fileBZip = await JSZip.loadAsync(fileBBlob);
 
-                // Add the 'content' folder with the generated JSON
-                fileBZip.folder("content").file("h5p_question_set.json", window.generatedJSON);
+                // **Add the 'content' folder with the generated JSON named 'content.json'**
+                fileBZip.folder("content").file("content.json", window.generatedJSON); // **Changed filename here**
 
                 // Generate the new zip file
                 const newZipBlob = await fileBZip.generateAsync({ type: "blob" });
