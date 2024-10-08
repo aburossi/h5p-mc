@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>H5P JSON Generator for Multiple Choice Questions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        #output {
+            margin-top: 20px;
+            white-space: pre-wrap;
+            background-color: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+    <!-- Include JSZip and FileSaver.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+
+    <h1>H5P JSON Generator for Multiple Choice Questions</h1>
+    <p>Enter your questions and answers in the specified format below:</p>
+    <pre>
+1. QUESTION 1 
+
+*CORRECT ANSWER::FEEDBACK *ITALIC TEXT*
+
+INCORRECT ANSWER::FEEDBACK **BOLD TEXT**
+
+INCORRECT ANSWER::FEEDBACK
+
+
+2. QUESTION 2
+
+*CORRECT ANSWER::FEEDBACK
+
+INCORRECT ANSWER::FEEDBACK
+
+INCORRECT ANSWER::FEEDBACK
+
+
+3. QUESTION 3
+
+*CORRECT ANSWER::FEEDBACK
+
+INCORRECT ANSWER::FEEDBACK
+
+INCORRECT ANSWER::FEEDBACK
+    </pre>
+    <textarea id="inputText" placeholder="Enter your formatted questions here..."></textarea>
+    <br>
+    <button onclick="generateJSON()">Generate JSON</button>
+    <button onclick="downloadJSON()" id="downloadBtn" style="display:none;">Download JSON</button>
+    <button onclick="downloadZippedFile()" id="downloadZipBtn" style="display:none;">Download Zipped File</button>
+    <h2>Generated JSON:</h2>
+    <div id="output"></div>
+
+    <script>
+        // Existing functions: generateUUID, formatFeedback, parseInput, generateJSON, downloadJSON
+
+        // Function to generate UUID (unchanged)
+        function generateUUID() { // Public Domain/MIT
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return crypto.randomUUID();
+            } else {
+                // Fallback for older browsers
+                let d = new Date().getTime();//Timestamp
+                let d2 = (performance && performance.now && (performance.now()*1000)) || 0;//Time in microseconds since page-load or 0 if unsupported
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    let r = Math.random() * 16;//random number between 0 and 16
+                    if(d > 0){
+                        r = (d + r)%16 | 0;
+                        d = Math.floor(d/16);
+                    } else {
+                        r = (d2 + r)%16 | 0;
+                        d2 = Math.floor(d2/16);
+                    }
+                    return (c==='x' ? r : (r&0x3|0x8)).toString(16);
+                });
+            }
+        }
+
+        // Function to format feedback (unchanged)
+        function formatFeedback(text) {
+            // Replace **bold** with <strong>bold</strong>
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Replace *italic* with <em>italic</em>
+            text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            return text;
+        }
+
+        // Function to parse input (unchanged)
+        function parseInput(input) {
+            const questions = [];
+            // Split by question numbers (e.g., "1. ", "2. ", etc.)
+            const questionBlocks = input.split(/\n\s*\n|(?=\d+\.\s)/).filter(block => block.trim() !== '');
+
+            questionBlocks.forEach(block => {
+                // Extract question number and text
+                const questionMatch = block.match(/^(\d+)\.\s*(.*)$/m);
+                if (!questionMatch) {
+                    console.warn("Question block not properly formatted:", block);
+                    return;
+                }
+                const questionNumber = parseInt(questionMatch[1], 10);
+                const questionText = questionMatch[2].trim();
+
+                // Extract answers
+                const answerLines = block.split('\n').slice(1).filter(line => line.trim() !== '');
+                const answers = [];
+                answerLines.forEach(line => {
+                    let isCorrect = false;
+                    if (line.startsWith('*')) {
+                        isCorrect = true;
+                        line = line.substring(1).trim();
+                    }
+                    const parts = line.split('::');
+                    if (parts.length < 2) {
+                        console.warn("Answer line not properly formatted:", line);
+                        return;
+                    }
+                    const answerText = parts[0].trim();
+                    let feedback = parts.slice(1).join('::').trim();
+                    feedback = formatFeedback(feedback);
+
+                    answers.push({
+                        text: answerText,
+                        correct: isCorrect,
+                        tipsAndFeedback: {
+                            tip: "",
+                            chosenFeedback: `<div>${feedback}</div>\n`,
+                            notChosenFeedback: ""
+                        }
+                    });
+                });
+
+                // Build question object
+                const questionObj = {
+                    library: "H5P.MultiChoice 1.16",
+                    params: {
+                        question: questionText,
+                        answers: answers,
+                        behaviour: {
+                            singleAnswer: true,
+                            enableRetry: true,
+                            enableSolutionsButton: true,
+                            enableCheckButton: true,
+                            type: "auto",
+                            singlePoint: false,
+                            randomAnswers: true,
+                            showSolutionsRequiresInput: true,
+                            confirmCheckDialog: false,
+                            confirmRetryDialog: false,
+                            autoCheck: false,
+                            passPercentage: 100,
+                            showScorePoints: true
+                        },
+                        media: {
+                            disableImageZooming: false
+                        },
+                        overallFeedback: [
+                            { from: 0, to: 100 }
+                        ],
+                        UI: {
+                            checkAnswerButton: "Überprüfen",
+                            submitAnswerButton: "Absenden",
+                            showSolutionButton: "Lösung anzeigen",
+                            tryAgainButton: "Wiederholen",
+                            tipsLabel: "Hinweis anzeigen",
+                            scoreBarLabel: "Du hast :num von :total Punkten erreicht.",
+                            tipAvailable: "Hinweis verfügbar",
+                            feedbackAvailable: "Rückmeldung verfügbar",
+                            readFeedback: "Rückmeldung vorlesen",
+                            wrongAnswer: "Falsche Antwort",
+                            correctAnswer: "Richtige Antwort",
+                            shouldCheck: "Hätte gewählt werden müssen",
+                            shouldNotCheck: "Hätte nicht gewählt werden sollen",
+                            noInput: "Bitte antworte, bevor du die Lösung ansiehst",
+                            a11yCheck: "Die Antworten überprüfen. Die Auswahlen werden als richtig, falsch oder fehlend markiert.",
+                            a11yShowSolution: "Die Lösung anzeigen. Die richtigen Lösungen werden in der Aufgabe angezeigt.",
+                            a11yRetry: "Die Aufgabe wiederholen. Alle Versuche werden zurückgesetzt und die Aufgabe wird erneut gestartet."
+                        },
+                        confirmCheck: {
+                            header: "Beenden?",
+                            body: "Ganz sicher beenden?",
+                            cancelLabel: "Abbrechen",
+                            confirmLabel: "Beenden"
+                        },
+                        confirmRetry: {
+                            header: "Wiederholen?",
+                            body: "Ganz sicher wiederholen?",
+                            cancelLabel: "Abbrechen",
+                            confirmLabel: "Bestätigen"
+                        }
+                    },
+                    subContentId: generateUUID(),
+                    metadata: {
+                        contentType: "Multiple Choice",
+                        license: "U",
+                        title: "Unbenannt: Multiple Choice",
+                        authors: [],
+                        changes: [],
+                        extraTitle: "Unbenannt: Multiple Choice"
+                    }
+                };
+
+                questions.push(questionObj);
+            });
+
+            return questions;
+        }
+
+        // Function to generate JSON (modified)
+        function generateJSON() {
+            const inputText = document.getElementById('inputText').value;
+            if (inputText.trim() === '') {
+                alert("Please enter the formatted questions in the text area.");
+                return;
+            }
+
+            const questions = parseInput(inputText);
+
+            if (questions.length === 0) {
+                alert("No valid questions found. Please check the input format.");
+                return;
+            }
+
+            // Build the full JSON structure (existing code)
+            const fullJSON = {
+                introPage: {
+                    showIntroPage: true,
+                    startButtonText: "Quiz starten",
+                    title: "X.X KAPITELNAME",
+                    introduction: "<p style=\"text-align:center\"><strong>Wie gut kennen Sie sich mit dem Thema aus? Starten Sie das Quiz, um Ihr Wissen zu testen.</strong></p>\n\n<p style=\"text-align:center\"> </p>\n\n<p style=\"text-align:center\"> <strong>Pro Runde</strong> werden zufällig <strong>10 Fragen</strong> angezeigt.</p>\n\n<p style=\"text-align:center\"><strong>Wiederholen Sie die Übung, um weitere Fragen zu beantworten.</strong></p>\n"
+                },
+                progressType: "dots",
+                passPercentage: 50,
+                disableBackwardsNavigation: false,
+                randomQuestions: false,
+                endGame: {
+                    showResultPage: true,
+                    showSolutionButton: true,
+                    showRetryButton: true,
+                    noResultMessage: "Quiz beendet",
+                    message: "Dein Ergebnis:",
+                    scoreBarLabel: "Du hast @score von @total Punkten erreicht.",
+                    overallFeedback: [
+                        { from: 0, to: 100 }
+                    ],
+                    solutionButtonText: "Lösung anzeigen",
+                    retryButtonText: "Wiederholen",
+                    finishButtonText: "Beenden",
+                    submitButtonText: "Absenden",
+                    showAnimations: false,
+                    skippable: false,
+                    skipButtonText: "Video überspringen"
+                },
+                override: {
+                    checkButton: true
+                },
+                texts: {
+                    prevButton: "Zurück",
+                    nextButton: "Weiter",
+                    finishButton: "Beenden",
+                    submitButton: "Absenden",
+                    textualProgress: "Aktuelle Frage: @current von @total Fragen",
+                    jumpToQuestion: "Frage %d von %total",
+                    questionLabel: "Frage",
+                    readSpeakerProgress: "Frage @current von @total",
+                    unansweredText: "Unbeantwortet",
+                    answeredText: "Beantwortet",
+                    currentQuestionText: "Aktuelle Frage",
+                    navigationLabel: "Fragen"
+                },
+                questions: questions
+            };
+
+            const jsonString = JSON.stringify(fullJSON, null, 2);
+            document.getElementById('output').textContent = jsonString;
+            // Prepare the download
+            window.generatedJSON = jsonString;
+            document.getElementById('downloadBtn').style.display = 'inline-block';
+            document.getElementById('downloadZipBtn').style.display = 'inline-block'; // Show the new zip download button
+        }
+
+        // Function to download JSON (unchanged)
+        function downloadJSON() {
+            if (!window.generatedJSON) {
+                alert("No JSON generated to download.");
+                return;
+            }
+            const blob = new Blob([window.generatedJSON], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'h5p_question_set.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // New function to download the zipped file containing File B and the generated JSON
+        async function downloadZippedFile() {
+            if (!window.generatedJSON) {
+                alert("No JSON generated to download.");
+                return;
+            }
+
+            // Initialize JSZip
+            const zip = new JSZip();
+
+            try {
+                // Fetch File B.zip from GitHub
+                const fileBUrl = "https://raw.githubusercontent.com/yourusername/h5p-json-generator/main/resources/fileB.zip"; // Replace with your actual URL
+                const response = await fetch(fileBUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch File B: ${response.statusText}`);
+                }
+
+                const fileBBlob = await response.blob();
+
+                // Load File B.zip into JSZip
+                const fileBZip = await JSZip.loadAsync(fileBBlob);
+
+                // Add the 'content' folder with the generated JSON
+                fileBZip.folder("content").file("h5p_question_set.json", window.generatedJSON);
+
+                // Generate the new zip file
+                const newZipBlob = await fileBZip.generateAsync({ type: "blob" });
+
+                // Trigger the download using FileSaver.js
+                saveAs(newZipBlob, "combined_fileB_with_content.zip");
+
+            } catch (error) {
+                console.error(error);
+                alert("An error occurred while fetching File B or creating the zip.");
+            }
+        }
+    </script>
+
+</body>
+</html>
