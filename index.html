@@ -53,7 +53,7 @@ INCORRECT ANSWER::FEEDBACK
     <br>
     <button onclick="generateJSON()">Generate JSON</button>
     <button onclick="downloadJSON()" id="downloadBtn" style="display:none;">Download JSON</button>
-    <button onclick="downloadZippedFile()" id="downloadZipBtn" style="display:none;">Download Zipped File</button>
+    <button onclick="downloadZippedFile()" id="downloadZipBtn" style="display:none;">Download H5P File</button>
     <h2>Generated JSON:</h2>
     <div id="output"></div>
 
@@ -297,22 +297,19 @@ INCORRECT ANSWER::FEEDBACK
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'content.json'; // **Changed filename from h5p_question_set.json to content.json**
+            a.download = 'content.json'; // Changed filename from h5p_question_set.json to content.json
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
 
-        // Function to download the zipped file containing File B and the generated JSON
+        // **Updated downloadZippedFile Function to Generate .h5p**
         async function downloadZippedFile() {
             if (!window.generatedJSON) {
                 alert("No JSON generated to download.");
                 return;
             }
-
-            // Initialize JSZip
-            const zip = new JSZip();
 
             try {
                 // Fetch File B.zip from GitHub
@@ -327,18 +324,18 @@ INCORRECT ANSWER::FEEDBACK
                 // Load File B.zip into JSZip
                 const fileBZip = await JSZip.loadAsync(fileBBlob);
 
-                // **Add the 'content' folder with the generated JSON named 'content.json'**
-                fileBZip.folder("content").file("content.json", window.generatedJSON); // **Changed filename here**
+                // **Add 'content.json' at the root of the zip**
+                fileBZip.file("content.json", window.generatedJSON); // Removed the 'content' folder
 
                 // Generate the new zip file
                 const newZipBlob = await fileBZip.generateAsync({ type: "blob" });
 
                 // Trigger the download using FileSaver.js
-                saveAs(newZipBlob, "combined_fileB_with_content.zip");
+                saveAs(newZipBlob, "combined_content.h5p"); // Changed extension to .h5p
 
             } catch (error) {
                 console.error(error);
-                alert("An error occurred while fetching File B or creating the zip.");
+                alert("An error occurred while fetching File B or creating the .h5p file.");
             }
         }
     </script>
